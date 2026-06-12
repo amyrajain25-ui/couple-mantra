@@ -1,0 +1,97 @@
+/**
+ * db/migrate.mjs
+ * Runs the schema.sql migration against the Neon PostgreSQL database.
+ * Credentials are read from .env — never hardcoded.
+ *
+ * Usage:
+ *   node db/migrate.mjs
+ */
+
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// ── Load .env manually (no external dotenv needed) ──────────────────────────
+function loadEnv() {
+  try {
+    const envPath = join(__dirname, '..', '.env');
+    const raw = readFileSync(envPath, 'utf-8');
+    for (const line of raw.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eqIdx = trimmed.indexOf('=');
+      if (eqIdx === -1) continue;
+      const key = trimmed.slice(0, eqIdx).trim();
+      const val = trimmed.slice(eqIdx + 1).trim();
+      if (!process.env[key]) process.env[key] = val;
+    }
+  } catch {
+    console.error('⚠️  Could not read .env file. Make sure it exists.');
+    process.exit(1);
+  }
+}
+
+loadEnv();
+
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) {
+  console.error('❌  DATABASE_URL is not set in your .env file.');
+  process.exit(1);
+}
+
+// ── Run migration ────────────────────────────────────────────────────────────
+async function migrate() {
+  // Dynamic import so the package must be installed
+  let neon;
+  try {
+    const mod = await import('@neondatabase/serverless');
+    neon = mod.neon;
+  } catch {
+    console.error('❌  Package @neondatabase/serverless is not installed.');
+    console.error('    Run: npm install @neondatabase/serverless');
+    process.exit(1);
+  }
+
+  const sql = neon(DATABASE_URL);
+  const schemaPath = join(__dirname, 'schema.sql');
+  const schemaSql = readFileSync(schemaPath, 'utf-8');
+
+  console.log('🚀  Connecting to Neon database...');
+
+  try {
+    // Split into individual statements and execute each one
+    const statements = schemaSql
+      .split(';')
+      .map(s => s.trim())
+      .filter(s => s.length > 0 && !s.startsWith('--'));
+
+    let count = 0;
+    for (const stmt of statements) {
+      await sql.query(stmt);
+      count++;
+    }
+
+    console.log(`✅  Migration complete! Ran ${count} SQL statements.`);
+    console.log('📋  Tables created:');
+    console.log('    • couples');
+    console.log('    • journal_entries');
+    console.log('    • assessments');
+    console.log('    • therapists');
+    console.log('    • bookings');
+    console.log('    • activities');
+    console.log('    • love_bombs');
+    console.log('    • goals');
+    console.log('    • course_progress');
+    console.log('    • notification_settings');
+    console.log('    + Indexes & seed therapist data');
+  } catch (err) {
+    console.error('❌  Migration failed:', err.message);
+    process.exit(1);
+  }
+}
+
+migrate();

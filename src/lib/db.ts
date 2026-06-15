@@ -1,30 +1,56 @@
 /**
  * src/lib/db.ts
- * Neon database client — reads DATABASE_URL from environment variables.
- * Import this wherever you need to make a database query.
- *
- * NOTE: DATABASE_URL must be set in your .env file.
- * It is never hardcoded here.
+ * Neon database client — supports loading DATABASE_URL from .env during dev
+ * and fetching /couple/config.json at runtime in production.
  */
 
 import { neon } from '@neondatabase/serverless';
 
-const DATABASE_URL = import.meta.env.DATABASE_URL;
+let sqlClient: any = null;
+let initPromise: Promise<void> | null = null;
 
-if (!DATABASE_URL) {
-  throw new Error(
-    'DATABASE_URL environment variable is not set. ' +
-    'Add it to your .env file: DATABASE_URL=postgresql://...'
-  );
+async function getSqlClient() {
+  if (sqlClient) return sqlClient;
+
+  if (!initPromise) {
+    initPromise = (async () => {
+      // In Vite dev mode, we can use VITE_DATABASE_URL or DATABASE_URL
+      let databaseUrl = import.meta.env.VITE_DATABASE_URL || import.meta.env.DATABASE_URL;
+
+      if (!databaseUrl) {
+        try {
+          // In production, fetch config.json served under the same subpath /couple/
+          const res = await fetch('/couple/config.json');
+          if (res.ok) {
+            const data = await res.json();
+            databaseUrl = data.DATABASE_URL;
+          }
+        } catch (err) {
+          console.warn('[db] Could not fetch runtime config.json:', err);
+        }
+      }
+
+      if (!databaseUrl) {
+        throw new Error(
+          'DATABASE_URL is not set. Please define VITE_DATABASE_URL in .env ' +
+          'or provide /couple/config.json at runtime.'
+        );
+      }
+
+      sqlClient = neon(databaseUrl);
+    })();
+  }
+
+  await initPromise;
+  return sqlClient;
 }
 
 /**
- * Tagged-template SQL client.
- *
- * Usage:
- *   import { sql } from '@/lib/db';
- *   const rows = await sql`SELECT * FROM couples WHERE id = ${coupleId}`;
+ * Tagged-template SQL client wrapper that initializes lazily.
  */
-export const sql = neon(DATABASE_URL);
+export const sql = async (strings: TemplateStringsArray, ...values: any[]) => {
+  const client = await getSqlClient();
+  return client(strings, ...values);
+};
 
 export default sql;

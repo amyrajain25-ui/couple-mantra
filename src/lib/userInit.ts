@@ -9,7 +9,7 @@
  */
 
 const NEON_ENDPOINT =
-  'https://ep-soft-resonance-advbdvvm-pooler.c-2.us-east-1.aws.neon.tech/sql';
+  'https://ep-dry-pine-aqtdr8xp-pooler.c-8.us-east-1.aws.neon.tech/sql';
 
 /** Run a single SQL statement against Neon via the HTTP API. */
 async function neonQuery(sql: string, params: (string | number | null)[] = []) {

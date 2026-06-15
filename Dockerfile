@@ -3,11 +3,16 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
+# Install system build tools needed for native modules (esbuild, @tailwindcss/oxide)
+RUN apk add --no-cache python3 make g++
+
 # Copy package files first for layer caching
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
-# Install pnpm and dependencies
-RUN npm install -g pnpm && pnpm install --frozen-lockfile
+# Install pnpm globally then install deps (allow build scripts for native modules)
+RUN npm install -g pnpm && \
+    pnpm config set unsafe-perm true && \
+    pnpm install --frozen-lockfile
 
 # Copy all source files
 COPY . .

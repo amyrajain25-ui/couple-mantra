@@ -62,15 +62,17 @@ async function migrate() {
 
   console.log('🚀  Connecting to Neon database...');
 
+  let statements = [];
+  let count = 0;
   try {
     // Split into individual statements and execute each one
-    const statements = schemaSql
+    statements = schemaSql
       .split(';')
       .map(s => s.trim())
-      .filter(s => s.length > 0 && !s.startsWith('--'));
+      .filter(s => s.length > 0);
 
-    let count = 0;
     for (const stmt of statements) {
+      console.log(`Executing [${count}]: ${stmt.slice(0, 100)}...`);
       await sql.query(stmt);
       count++;
     }
@@ -89,7 +91,8 @@ async function migrate() {
     console.log('    • notification_settings');
     console.log('    + Indexes & seed therapist data');
   } catch (err) {
-    console.error('❌  Migration failed:', err.message);
+    console.error('❌  Migration failed at statement:', statements[count]);
+    console.error('❌  Error message:', err.message);
     process.exit(1);
   }
 }

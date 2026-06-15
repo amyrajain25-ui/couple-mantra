@@ -9,9 +9,8 @@ RUN apk add --no-cache python3 make g++
 # Copy package files first for layer caching
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
-# Install pnpm globally then install deps (allow build scripts for native modules)
+# Install pnpm globally then install deps
 RUN npm install -g pnpm && \
-    pnpm config set unsafe-perm true && \
     pnpm install --frozen-lockfile
 
 # Copy all source files
@@ -22,23 +21,16 @@ RUN pnpm build
 
 # ─── Stage 2: Serve ─────────────────────────────────────────────────────────
 FROM nginx:alpine AS production
+WORKDIR /usr/share/nginx/html
 
-# Copy built assets from builder stage
-COPY --from=builder /app/dist /usr/share/nginx/html
+# Copy built assets from builder stage to the subpath subdirectory
+COPY --from=builder /app/dist /usr/share/nginx/html/couple
 
-# Nginx config for SPA routing (handles React Router paths)
-RUN printf 'server {\n\
-  listen 80;\n\
-  root /usr/share/nginx/html;\n\
-  index index.html;\n\
-  location / {\n\
-    try_files $uri $uri/ /index.html;\n\
-  }\n\
-  location ~* \\.(js|css|png|jpg|jpeg|gif|ico|svg|woff2?)$ {\n\
-    expires 1y;\n\
-    add_header Cache-Control "public, immutable";\n\
-  }\n\
-}\n' > /etc/nginx/conf.d/default.conf
+# Remove default nginx config
+RUN rm /etc/nginx/conf.d/default.conf
+
+# Copy custom Nginx configuration for subpath hosting
+COPY vite-nginx.conf /etc/nginx/conf.d/nginx.conf
 
 EXPOSE 80
 

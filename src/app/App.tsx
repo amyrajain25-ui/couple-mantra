@@ -46,7 +46,7 @@ function AppContent() {
 
 export default function App() {
   return (
-    <Router>
+    <Router basename="/couple">
       {/* AuthGuard MUST wrap everything — no UI renders before identity is confirmed */}
       <AuthGuard>
         <CoupleProvider>
